@@ -1,0 +1,6 @@
+begin transaction;
+create extension pg_mockable
+    cascade;
+NOTICE:  installing required extension "hstore"
+call mockable.test__pg_mockable();
+rollback transaction;
