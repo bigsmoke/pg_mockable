@@ -1,7 +1,7 @@
 ---
 pg_extension_name: pg_mockable
-pg_extension_version: 0.1.0
-pg_readme_generated_at: 2022-12-03 13:31:52.504814+00
+pg_extension_version: 0.1.2
+pg_readme_generated_at: 2022-12-30 14:52:12.660283+00
 pg_readme_version: 0.1.2
 ---
 
@@ -95,6 +95,17 @@ Feel free to implement it.
 #### Function: `mockable.mock(regprocedure,anyelement)`
 
 #### Function: `mockable.now()`
+
+#### Function: `mockable.pg_mockable_meta_pgxn()`
+
+Returns the JSON meta data that has to go into the `META.json` file needed for
+[PGXN—PostgreSQL Extension Network](https://pgxn.org/) packages.
+
+The `Makefile` includes a recipe to allow the developer to: `make META.json` to
+refresh the meta file with the function's current output, including the
+`default_version`.
+
+`pg_rowalesce` can indeed be found on PGXN: https://pgxn.org/dist/pg_mockable/
 
 #### Function: `mockable.pg_mockable_readme()`
 

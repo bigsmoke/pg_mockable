@@ -1,0 +1,53 @@
+{
+    "name": "pg_mockable",
+    "tags": [
+        "documentation",
+        "markdown",
+        "meta",
+        "plpgsql",
+        "function",
+        "functions"
+    ],
+    "license": "gpl_3",
+    "prereqs": {
+        "test": {
+            "requires": {
+                "pgtap": 0
+            }
+        },
+        "runtime": {
+            "requires": {
+                "hstore": 0
+            }
+        }
+    },
+    "version": "0.1.2",
+    "abstract": "Create mockable versions of functions from other schemas.",
+    "provides": {
+        "pg_readme": {
+            "file": "pg_mockable--0.1.0.sql",
+            "docfile": "README.md",
+            "version": "0.1.2"
+        }
+    },
+    "meta-spec": {
+        "url": "https://pgxn.org/spec/",
+        "version": "1.0.0"
+    },
+    "resources": {
+        "homepage": "https://blog.bigsmoke.us/tag/pg_mockable",
+        "bugtracker": {
+            "web": "https://github.com/bigsmoke/pg_mockable/issues"
+        },
+        "repository": {
+            "url": "https://github.com/bigsmoke/pg_mockable.git",
+            "web": "https://github.com/bigsmoke/pg_mockable",
+            "type": "git"
+        }
+    },
+    "maintainer": [
+        "Rowan Rodrik van der Molen <rowan@bigsmoke.us>"
+    ],
+    "description": "The `pg_mockable` extension can be used to create mockable versions of functions from other schemas.",
+    "generated_by": "`select pg_mockable_meta_pgxn()`"
+}
