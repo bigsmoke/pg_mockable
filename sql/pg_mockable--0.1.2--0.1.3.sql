@@ -3,16 +3,6 @@
 
 --------------------------------------------------------------------------------------------------------------
 
-do $$
-begin
-    execute 'ALTER DATABASE ' || current_database()
-        || ' SET pg_mockable.readme_url TO '
-        || quote_literal('https://github.com/bigsmoke/pg_mockable/blob/master/README.md');
-end;
-$$;
-
---------------------------------------------------------------------------------------------------------------
-
 create or replace function pg_mockable_meta_pgxn()
     returns jsonb
     stable
@@ -55,7 +45,7 @@ create or replace function pg_mockable_meta_pgxn()
         }'::jsonb
         ,'provides'
         ,('{
-            "pg_readme": {
+            "pg_mockable": {
                 "file": "pg_mockable--0.1.0.sql",
                 "version": "' || (
                     select
@@ -89,26 +79,12 @@ create or replace function pg_mockable_meta_pgxn()
         ,'`select pg_mockable_meta_pgxn()`'
         ,'tags'
         ,array[
-            'documentation',
-            'markdown',
-            'meta',
             'plpgsql',
             'function',
-            'functions'
+            'functions',
+            'mocking',
+            'testing'
         ]
     );
-
-comment
-    on function pg_mockable_meta_pgxn()
-    is $markdown$
-Returns the JSON meta data that has to go into the `META.json` file needed for
-[PGXN—PostgreSQL Extension Network](https://pgxn.org/) packages.
-
-The `Makefile` includes a recipe to allow the developer to: `make META.json` to
-refresh the meta file with the function's current output, including the
-`default_version`.
-
-`pg_rowalesce` can indeed be found on PGXN: https://pgxn.org/dist/pg_mockable/
-$markdown$;
 
 --------------------------------------------------------------------------------------------------------------

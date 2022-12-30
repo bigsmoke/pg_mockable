@@ -1,7 +1,7 @@
 ---
 pg_extension_name: pg_mockable
-pg_extension_version: 0.1.2
-pg_readme_generated_at: 2022-12-30 14:52:12.660283+00
+pg_extension_version: 0.1.3
+pg_readme_generated_at: 2022-12-30 14:59:35.472552+00
 pg_readme_version: 0.1.2
 ---
 
