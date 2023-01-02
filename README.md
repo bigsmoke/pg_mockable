@@ -1,8 +1,8 @@
 ---
 pg_extension_name: pg_mockable
-pg_extension_version: 0.1.4
-pg_readme_generated_at: 2022-12-30 15:11:54.160774+00
-pg_readme_version: 0.3.4
+pg_extension_version: 0.1.5
+pg_readme_generated_at: 2023-01-02 15:05:50.192738+00
+pg_readme_version: 0.3.5
 ---
 
 The `pg_mockable` PostgreSQL extension can be used to create mockable versions
@@ -53,6 +53,20 @@ In fact, this example won't work, because `mockable.now()` _always_ exists, beca
 was the whole reason that this extension was created in the first place.
 
 ## Object reference
+
+### Schema: `mockable`
+
+`pg_mockable` must be installed in the `mockable` schema.  Hence, it is not relocatable.
+
+---
+
+The `mockable` schema belongs to the `pg_mockable` extension.
+
+Postgres (as of Pg 15) doesn't allow one to specify a _default_ schema, and do
+something like `schema = 'mockable'` combined with `relocatable = true` in the
+`.control` file.  Therefore I decided to choose the `mockable` schema name
+_for_ you, even though you might have very well preferred something shorted
+like `mock`, even shorter like `mck`, or more verbose such as `mock_objects`.
 
 ### Tables
 
@@ -173,7 +187,7 @@ The `Makefile` includes a recipe to allow the developer to: `make META.json` to
 refresh the meta file with the function's current output, including the
 `default_version`.
 
-`pg_rowalesce` can indeed be found on PGXN: https://pgxn.org/dist/pg_mockable/
+`pg_mockable` can indeed be found on PGXN: https://pgxn.org/dist/pg_mockable/
 
 Function return type: `jsonb`
 
