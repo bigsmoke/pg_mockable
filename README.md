@@ -1,8 +1,8 @@
 ---
 pg_extension_name: pg_mockable
-pg_extension_version: 0.1.5
-pg_readme_generated_at: 2023-01-02 15:05:50.192738+00
-pg_readme_version: 0.3.5
+pg_extension_version: 0.1.6
+pg_readme_generated_at: 2023-01-03 09:00:12.571208+00
+pg_readme_version: 0.3.6
 ---
 
 The `pg_mockable` PostgreSQL extension can be used to create mockable versions
