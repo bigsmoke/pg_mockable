@@ -1,8 +1,8 @@
 ---
 pg_extension_name: pg_mockable
-pg_extension_version: 0.1.6
-pg_readme_generated_at: 2023-01-03 09:00:12.571208+00
-pg_readme_version: 0.3.6
+pg_extension_version: 0.1.7
+pg_readme_generated_at: 2023-02-28 21:42:15.388193+00
+pg_readme_version: 0.5.6
 ---
 
 The `pg_mockable` PostgreSQL extension can be used to create mockable versions
@@ -85,7 +85,7 @@ The `mock_memory` table has 2 attributes:
 
 ### Routines
 
-#### Function: `"current_date" ()`
+#### Function: `"current_date"()`
 
 `current_date()` is derived from `now()`.  To mock it, mock `now()`.
 
@@ -93,7 +93,7 @@ Function return type: `date`
 
 Function attributes: `STABLE`
 
-#### Function: `"current_time" ()`
+#### Function: `"current_time"()`
 
 `current_time()` is derived from `now()`.  To mock it, mock `now()`.
 
@@ -104,7 +104,7 @@ Function return type: `time with time zone`
 
 Function attributes: `STABLE`
 
-#### Function: `"current_timestamp" ()`
+#### Function: `"current_timestamp"()`
 
 `current_timestamp()` is derived from `now()`.  To mock it, mock `now()`.
 
@@ -115,7 +115,7 @@ Function return type: `timestamp with time zone`
 
 Function attributes: `STABLE`
 
-#### Function: `"localtime" ()`
+#### Function: `"localtime"()`
 
 `localtime()` is derived from `now()`.  To mock it, mock `now()`.
 
@@ -126,7 +126,7 @@ Function return type: `time without time zone`
 
 Function attributes: `STABLE`
 
-#### Function: `"localtimestamp" ()`
+#### Function: `"localtimestamp"()`
 
 `localtimestamp()` is derived from `now()`.  To mock it, mock `now()`.
 
@@ -137,7 +137,7 @@ Function return type: `timestamp without time zone`
 
 Function attributes: `STABLE`
 
-#### Function: `mockable.now ()`
+#### Function: `mockable.now()`
 
 Function return type: `timestamp with time zone`
 
@@ -147,7 +147,7 @@ Function-local settings:
 
   *  `SET search_path TO mockable, public, pg_temp`
 
-#### Function: `mockable.timeofday ()`
+#### Function: `mockable.timeofday()`
 
 Function return type: `text`
 
@@ -157,7 +157,7 @@ Function-local settings:
 
   *  `SET DateStyle TO Postgres`
 
-#### Function: `mockable.transaction_timestamp ()`
+#### Function: `mockable.transaction_timestamp()`
 
 Function return type: `timestamp with time zone`
 
@@ -178,10 +178,9 @@ Function-local settings:
 
   *  `SET search_path TO mockable, public, pg_temp`
 
-#### Function: `pg_mockable_meta_pgxn ()`
+#### Function: `pg_mockable_meta_pgxn()`
 
-Returns the JSON meta data that has to go into the `META.json` file needed for
-[PGXN—PostgreSQL Extension Network](https://pgxn.org/) packages.
+Returns the JSON meta data that has to go into the `META.json` file needed for [PGXN—PostgreSQL Extension Network](https://pgxn.org/) packages.
 
 The `Makefile` includes a recipe to allow the developer to: `make META.json` to
 refresh the meta file with the function's current output, including the
@@ -193,7 +192,7 @@ Function return type: `jsonb`
 
 Function attributes: `STABLE`
 
-#### Function: `pg_mockable_readme ()`
+#### Function: `pg_mockable_readme()`
 
 Generates the text for a `README.md` in Markdown format using the amazing power
 of the `pg_readme` extension.  Temporarily installs `pg_readme` if it is not
@@ -231,14 +230,14 @@ Function-local settings:
 
   *  `SET search_path TO mockable, public, pg_temp`
 
-#### Procedure: `test__pg_mockable ()`
+#### Procedure: `test__pg_mockable()`
 
 Procedure-local settings:
 
   *  `SET search_path TO mockable, public, pg_temp`
   *  `SET plpgsql.check_asserts TO true`
 
-```
+```sql
 CREATE OR REPLACE PROCEDURE mockable.test__pg_mockable()
  LANGUAGE plpgsql
  SET search_path TO 'mockable', 'public', 'pg_temp'
@@ -323,4 +322,4 @@ Procedure-local settings:
 
 ## Colophon
 
-This `README.md` for the `pg_mockable` `extension` was automatically generated using the [`pg_readme`](https://github.com/bigsmoke/pg_readme) PostgreSQL extension.
+This `README.md` for the `pg_mockable` extension was automatically generated using the [`pg_readme`](https://github.com/bigsmoke/pg_readme) PostgreSQL extension.
