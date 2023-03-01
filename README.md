@@ -1,9 +1,11 @@
 ---
 pg_extension_name: pg_mockable
-pg_extension_version: 0.1.7
-pg_readme_generated_at: 2023-02-28 21:42:15.388193+00
+pg_extension_version: 0.1.8
+pg_readme_generated_at: 2023-03-01 15:10:58.762072+00
 pg_readme_version: 0.5.6
 ---
+
+# `pg_mockable` – mock PostgreSQL functions
 
 The `pg_mockable` PostgreSQL extension can be used to create mockable versions
 of functions from other schemas.
@@ -49,8 +51,13 @@ create or replace function mockable.now()
 $$);
 ```
 
-In fact, this example won't work, because `mockable.now()` _always_ exists, because the need to mock `now()`
-was the whole reason that this extension was created in the first place.
+In fact, this example won't work, because `mockable.now()` _always_ exists,
+because the need to mock `now()` was the whole reason that this extension was
+created in the first place.  And `now()` is a special case, because, to mock
+`now()` effectively, a whole bunch of other current date-time retrieval
+functions have a mockable counterpart that all call the same `mockable.now()`
+function, so that mocking `pg_catalog.now()` _also_ effectively mocks
+`current_timestamp()`, etc.
 
 ## Object reference
 
@@ -74,7 +81,7 @@ There are 1 tables that directly belong to the `pg_mockable` extension.
 
 #### Table: `mock_memory`
 
-The `mock_memory` table has 2 attributes:
+The `mock_memory` table has 3 attributes:
 
 1. `mock_memory.routine_signature` `regprocedure`
 
@@ -82,6 +89,12 @@ The `mock_memory` table has 2 attributes:
    - `PRIMARY KEY (routine_signature)`
 
 2. `mock_memory.unmock_statement` `text`
+
+   - `NOT NULL`
+
+3. `mock_memory.is_prewrapped_by_pg_mockable` `boolean`
+
+   - `DEFAULT false`
 
 ### Routines
 
@@ -229,6 +242,58 @@ Function attributes: `STABLE`
 Function-local settings:
 
   *  `SET search_path TO mockable, public, pg_temp`
+
+#### Procedure: `test_dump_restore__pg_mockable (text)`
+
+Procedure arguments:
+
+| Arg. # | Arg. mode  | Argument name                                                     | Argument type                                                        | Default expression  |
+| ------ | ---------- | ----------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------- |
+|   `$1` |       `IN` | `test_stage$`                                                     | `text`                                                               |  |
+
+Procedure-local settings:
+
+  *  `SET search_path TO mockable, public, pg_temp`
+  *  `SET plpgsql.check_asserts TO true`
+  *  `SET pg_readme.include_this_routine_definition TO true`
+
+```sql
+CREATE OR REPLACE PROCEDURE mockable.test_dump_restore__pg_mockable(IN "test_stage$" text)
+ LANGUAGE plpgsql
+ SET search_path TO 'mockable', 'public', 'pg_temp'
+ SET "plpgsql.check_asserts" TO 'true'
+ SET "pg_readme.include_this_routine_definition" TO 'true'
+AS $procedure$
+declare
+begin
+    assert test_stage$ in ('pre-dump', 'post-restore');
+
+    if test_stage$ = 'pre-dump' then
+        create schema test__schema;
+        create function test__schema.func() returns int return 8;
+        call wrap_function('test__schema.func()');
+        assert mockable.mock('test__schema.func()', 88::int) = 88::int;
+        assert mockable.func() = 88;
+
+        assert mockable.mock('pg_catalog.now()', '2022-01-02 10:30'::timestamptz)
+            = '2022-01-02 10:30'::timestamptz;
+        assert mockable.now() = '2022-01-02 10:30'::timestamptz;
+
+    elsif test_stage$ = 'post-restore' then
+        assert exists (select from mock_memory where routine_signature = 'pg_catalog.now()'::regprocedure);
+        assert mockable.now() = pg_catalog.now(),
+            'This wrapper function should have been restored to a wrapper of the original function.';
+
+        assert exists (select from mock_memory where routine_signature = 'test__schema.func()'::regprocedure);
+        assert mockable.func() = 88,
+            'The wrapper function should have been restored, _with_ the mocked value.';
+
+        call unmock('test__schema.func()');
+        assert mockable.func() = 8;
+    end if;
+end;
+$procedure$
+```
 
 #### Procedure: `test__pg_mockable()`
 

@@ -136,6 +136,12 @@ create table mock_memory (
     routine_signature regprocedure
         primary key
     ,unmock_statement text
+        not null
+--  ,mocked_at timestamptz
+--  ,mocked_by name
+--        default_current_user
+--    ,mocked_type regtype
+--    ,mocked_value text
 );
 
 --------------------------------------------------------------------------------------------------------------

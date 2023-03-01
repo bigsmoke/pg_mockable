@@ -18,3 +18,10 @@ META.json: sql/META.sql install
 
 dist: META.json README.md
 	git archive --format zip --prefix=$(EXTENSION)-$(DISTVERSION)/ -o $(EXTENSION)-$(DISTVERSION).zip HEAD
+
+test_dump_restore: $(CURDIR)/test_dump_restore.sh sql/test_dump_restore.sql
+	PGDATABASE=test_dump_restore \
+		$< --extension $(EXTENSION) \
+		--psql-script-file sql/test_dump_restore.sql \
+		--out-file results/test_dump_restore.out \
+		--expected-out-file expected/test_dump_restore.out

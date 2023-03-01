@@ -1,4 +1,4 @@
-default_version = '0.1.7'
+default_version = '0.1.8'
 requires = 'hstore'
 superuser = false
 relocatable = false
