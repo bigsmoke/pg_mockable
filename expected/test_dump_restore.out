@@ -1,6 +1,5 @@
 -- createdb
 -- psql -f 'sql/test_dump_restore.sql' -v 'extension_name=pg_mockable' -v 'test_stage=pre-dump'
-psql:sql/test_dump_restore.sql:21: NOTICE:  installing required extension "hstore"
 CREATE EXTENSION
 CALL
 -- pg_dumpall --roles-only

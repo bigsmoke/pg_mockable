@@ -32,11 +32,6 @@ create or replace function pg_mockable_meta_pgxn()
         ,'postgresql'
         ,'prereqs'
         ,'{
-            "runtime": {
-                "requires": {
-                    "hstore": 0
-                }
-            },
             "test": {
                 "requires": {
                     "pgtap": 0

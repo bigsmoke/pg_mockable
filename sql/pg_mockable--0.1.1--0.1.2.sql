@@ -4,10 +4,35 @@
 --------------------------------------------------------------------------------------------------------------
 
 do $$
+declare
+    _extension_name name := 'pg_mockable';
+    _setting_name text := _extension_name || '.readme_url';
+    _ddl_cmd_to_set_pg_readme_url text := format(
+        'ALTER DATABASE %I SET %s = %L'
+        ,current_database()
+        ,_setting_name
+        ,'https://github.com/bigsmoke/' || _extension_name || '/blob/master/README.md'
+    );
 begin
-    execute 'ALTER DATABASE ' || current_database()
-        || ' SET pg_mockable.readme_url TO '
-        || quote_literal('https://github.com/bigsmoke/pg_mockable/blob/master/README.md');
+    if (select rolsuper from pg_roles where rolname = current_user) then
+        execute _ddl_cmd_to_set_pg_readme_url;
+    else
+        -- We say `superuser = false` in the control file; so let's just whine a little instead of crashing.
+        raise warning using
+            message = format(
+                'Because you''re installing the `%I` extension as non-superuser and because you'
+                || ' are also not the owner of the `%I` DB, the database-level `%I` setting has'
+                || ' not been set.'
+                ,_extension_name
+                ,current_database()
+                ,_setting_name
+            )
+            ,detail = 'Settings of the form `<extension_name>.readme_url` are used by `pg_readme` to'
+                || ' cross-link between extensions their README files.'
+            ,hint = 'If you want full inter-extension README cross-linking, you can ask your friendly'
+                || E' neighbourhood DBA to execute the following statement:\n'
+                || _ddl_cmd_to_set_pg_readme_url || ';';
+    end if;
 end;
 $$;
 

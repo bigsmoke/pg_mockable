@@ -1,8 +1,8 @@
 ---
 pg_extension_name: pg_mockable
-pg_extension_version: 0.1.8
-pg_readme_generated_at: 2023-03-01 15:10:58.762072+00
-pg_readme_version: 0.5.6
+pg_extension_version: 0.2.0
+pg_readme_generated_at: 2023-03-02 18:28:12.576955+00
+pg_readme_version: 0.6.0
 ---
 
 # `pg_mockable` – mock PostgreSQL functions
@@ -81,26 +81,51 @@ There are 1 tables that directly belong to the `pg_mockable` extension.
 
 #### Table: `mock_memory`
 
-The `mock_memory` table has 3 attributes:
+The `mock_memory` table has 6 attributes:
 
-1. `mock_memory.routine_signature` `regprocedure`
+1. `mock_memory.routine_signature` `text`
+
+   The mockable routine name and `IN` argument types as consumable or producable by `regprocedure`.
+
+   This concerns the name of the _original_ routine that is made mockable by the
+   wrapper routine that is created upon insertion in this table (or replaced upon
+   update).  The routine name must be qualified unless if it is a routine from the
+   `pg_catalog` schema.
+
+   The reason that the function signature is stored as `text` instead of the
+   `regprocedure` type is restorability, because OIDs cannot be assumed to be the
+   same between clusters and `pg_dump`/`pg_restore` cycles.
+
+   Check the official Postgres docs for more information about `regprocedure` and
+   other [OID types](https://www.postgresql.org/docs/8.1/datatype-oid.html).
 
    - `NOT NULL`
    - `PRIMARY KEY (routine_signature)`
 
-2. `mock_memory.unmock_statement` `text`
+2. `mock_memory.return_type` `text`
 
    - `NOT NULL`
 
-3. `mock_memory.is_prewrapped_by_pg_mockable` `boolean`
+3. `mock_memory.unmock_statement` `text`
+
+   - `NOT NULL`
+
+4. `mock_memory.is_prewrapped_by_pg_mockable` `boolean`
 
    - `DEFAULT false`
+
+5. `mock_memory.mock_value` `text`
+
+6. `mock_memory.mock_duration` `text`
+
+   - `DEFAULT 'TRANSACTION'::text`
+   - `CHECK (mock_duration = ANY (ARRAY['TRANSACTION'::text, 'PERSISTENT'::text]))`
 
 ### Routines
 
 #### Function: `"current_date"()`
 
-`current_date()` is derived from `now()`.  To mock it, mock `now()`.
+`current_date()` is derived from `mockable.now()`.  To mock it, mock `pg_catalog.now()`.
 
 Function return type: `date`
 
@@ -108,10 +133,10 @@ Function attributes: `STABLE`
 
 #### Function: `"current_time"()`
 
-`current_time()` is derived from `now()`.  To mock it, mock `now()`.
+`current_time()` is derived from `mockable.now()`.  To mock it, mock `pg_catalog.now()`.
 
-Unlike its standard (PostgreSQL) counterpart, `current_time()` does not support a precision parameter.
-Feel free to implement it.
+Unlike its standard (PostgreSQL) counterpart, `current_time()` does not support
+a precision parameter.  Feel free to implement it.
 
 Function return type: `time with time zone`
 
@@ -119,10 +144,10 @@ Function attributes: `STABLE`
 
 #### Function: `"current_timestamp"()`
 
-`current_timestamp()` is derived from `now()`.  To mock it, mock `now()`.
+`current_timestamp()` is derived from `mockable.now()`.  To mock it, mock `pg_catalog.now()`.
 
-Unlike its standard (PostgreSQL) counterpart, `current_timestamp()` does not support a precision parameter.
-Feel free to implement it.
+Unlike its standard (PostgreSQL) counterpart, `current_timestamp()` does not
+support a precision parameter.  Feel free to implement it.
 
 Function return type: `timestamp with time zone`
 
@@ -130,10 +155,10 @@ Function attributes: `STABLE`
 
 #### Function: `"localtime"()`
 
-`localtime()` is derived from `now()`.  To mock it, mock `now()`.
+`localtime()` is derived from `mockable.now()`.  To mock it, mock `pg_catalog.now()`.
 
-Unlike its standard (PostgreSQL) counterpart, `localtime()` does not support a precision parameter.
-Feel free to implement it.
+Unlike its standard (PostgreSQL) counterpart, `localtime()` does not support a
+precision parameter.  Feel free to implement it.
 
 Function return type: `time without time zone`
 
@@ -141,7 +166,7 @@ Function attributes: `STABLE`
 
 #### Function: `"localtimestamp"()`
 
-`localtimestamp()` is derived from `now()`.  To mock it, mock `now()`.
+`localtimestamp()` is derived from `mockable.now()`.  To mock it, mock `pg_catalog.now()`.
 
 Unlike its standard (PostgreSQL) counterpart, `localtimestamp()` does not support a precision parameter.
 Feel free to implement it.
@@ -152,13 +177,11 @@ Function attributes: `STABLE`
 
 #### Function: `mockable.now()`
 
+Mockable wrapper function for `now()`.
+
 Function return type: `timestamp with time zone`
 
 Function attributes: `STABLE`, `RETURNS NULL ON NULL INPUT`
-
-Function-local settings:
-
-  *  `SET search_path TO mockable, public, pg_temp`
 
 #### Function: `mockable.timeofday()`
 
@@ -176,6 +199,36 @@ Function return type: `timestamp with time zone`
 
 Function attributes: `STABLE`
 
+#### Function: `mock_memory__after_magic()`
+
+Function return type: `trigger`
+
+Function-local settings:
+
+  *  `SET search_path TO pg_catalog`
+
+#### Function: `mock_memory__before_magic()`
+
+Function return type: `trigger`
+
+Function-local settings:
+
+  *  `SET search_path TO pg_catalog`
+
+#### Function: `mock_memory__reset_value()`
+
+This trigger ensures that the mocked value is always forgotten before transaction end.
+
+Resetting the value in turn ensures that another trigger unmocks the wrapper
+function; that is, it will be restored to act as a thin wrapper around the
+original (wrapped) function.
+
+Function return type: `trigger`
+
+Function-local settings:
+
+  *  `SET search_path TO pg_catalog`
+
 #### Function: `mock (regprocedure, anyelement)`
 
 Function arguments:
@@ -189,7 +242,7 @@ Function return type: `anyelement`
 
 Function-local settings:
 
-  *  `SET search_path TO mockable, public, pg_temp`
+  *  `SET search_path TO pg_catalog`
 
 #### Function: `pg_mockable_meta_pgxn()`
 
@@ -207,15 +260,16 @@ Function attributes: `STABLE`
 
 #### Function: `pg_mockable_readme()`
 
-Generates the text for a `README.md` in Markdown format using the amazing power
-of the `pg_readme` extension.  Temporarily installs `pg_readme` if it is not
-already installed in the current database.
+Generates the text for a `README.md` in Markdown format with the help of the `pg_readme` extension.
+
+This function temporarily installs `pg_readme` if it is not already installed
+in the current database.
 
 Function return type: `text`
 
 Function-local settings:
 
-  *  `SET search_path TO mockable, public, pg_temp`
+  *  `SET search_path TO mockable, pg_temp`
   *  `SET pg_readme.include_view_definitions_like TO true`
   *  `SET pg_readme.include_routine_definitions_like TO {test__%}`
 
@@ -226,7 +280,7 @@ Conveniently go from function calling signature description or OID (`regprocedur
 Example:
 
 ```sql
-select pg_proc('pg_catalog.current_setting(text, bool)');
+SELECT pg_proc('pg_catalog.current_setting(text, bool)');
 ```
 
 Function arguments:
@@ -239,11 +293,9 @@ Function return type: `pg_proc`
 
 Function attributes: `STABLE`
 
-Function-local settings:
-
-  *  `SET search_path TO mockable, public, pg_temp`
-
 #### Procedure: `test_dump_restore__pg_mockable (text)`
+
+This procedure is to be called by the `test_dump_restore.sh` and `test_dump_restore.sql` companion scripts, once before `pg_dump` (with `test_stage$ = 'pre-dump'` argument) and once after `pg_restore` (with the `test_stage$ = 'post-restore'`).
 
 Procedure arguments:
 
@@ -253,14 +305,14 @@ Procedure arguments:
 
 Procedure-local settings:
 
-  *  `SET search_path TO mockable, public, pg_temp`
+  *  `SET search_path TO pg_catalog, mockable`
   *  `SET plpgsql.check_asserts TO true`
   *  `SET pg_readme.include_this_routine_definition TO true`
 
 ```sql
 CREATE OR REPLACE PROCEDURE mockable.test_dump_restore__pg_mockable(IN "test_stage$" text)
  LANGUAGE plpgsql
- SET search_path TO 'mockable', 'public', 'pg_temp'
+ SET search_path TO 'pg_catalog', 'mockable'
  SET "plpgsql.check_asserts" TO 'true'
  SET "pg_readme.include_this_routine_definition" TO 'true'
 AS $procedure$
@@ -271,25 +323,34 @@ begin
     if test_stage$ = 'pre-dump' then
         create schema test__schema;
         create function test__schema.func() returns int return 8;
-        call wrap_function('test__schema.func()');
+        perform wrap_function('test__schema.func()');
         assert mockable.mock('test__schema.func()', 88::int) = 88::int;
         assert mockable.func() = 88;
+
+        create function test__schema.func2() returns text[] return array['beh', 'blah'];
+        perform wrap_function('test__schema.func2()', mock_duration$ => 'PERSISTENT');
+        assert mockable.func2() = array['beh', 'blah'];
+        assert mockable.mock('test__schema.func2()', array['boe', 'bah']) = array['boe', 'bah'];
+        assert mockable.func2() = array['boe', 'bah'];
 
         assert mockable.mock('pg_catalog.now()', '2022-01-02 10:30'::timestamptz)
             = '2022-01-02 10:30'::timestamptz;
         assert mockable.now() = '2022-01-02 10:30'::timestamptz;
 
     elsif test_stage$ = 'post-restore' then
-        assert exists (select from mock_memory where routine_signature = 'pg_catalog.now()'::regprocedure);
+        assert exists (select from mock_memory where routine_signature = 'now()'::regprocedure::text);
         assert mockable.now() = pg_catalog.now(),
             'This wrapper function should have been restored to a wrapper of the original function.';
 
-        assert exists (select from mock_memory where routine_signature = 'test__schema.func()'::regprocedure);
-        assert mockable.func() = 88,
-            'The wrapper function should have been restored, _with_ the mocked value.';
+        assert exists (select from mock_memory where routine_signature = 'test__schema.func()');
+        assert mockable.func() = 8,
+            'The wrapper function should have been restored to a wrapper of the original function.';
 
-        call unmock('test__schema.func()');
-        assert mockable.func() = 8;
+        assert exists (select from mock_memory where routine_signature = 'test__schema.func2()');
+        assert mockable.func2() = array['boe', 'bah'],
+            'The wrapper function should have been restored, and not unmocked.';
+        call mockable.unmock('test__schema.func2()');
+        assert mockable.func2() = array['beh', 'blah'];
     end if;
 end;
 $procedure$
@@ -299,14 +360,16 @@ $procedure$
 
 Procedure-local settings:
 
-  *  `SET search_path TO mockable, public, pg_temp`
+  *  `SET search_path TO pg_catalog`
   *  `SET plpgsql.check_asserts TO true`
+  *  `SET pg_readme.include_this_routine_definition TO true`
 
 ```sql
 CREATE OR REPLACE PROCEDURE mockable.test__pg_mockable()
  LANGUAGE plpgsql
- SET search_path TO 'mockable', 'public', 'pg_temp'
+ SET search_path TO 'pg_catalog'
  SET "plpgsql.check_asserts" TO 'true'
+ SET "pg_readme.include_this_routine_definition" TO 'true'
 AS $procedure$
 declare
     _now timestamptz;
@@ -327,6 +390,10 @@ begin
     assert pg_catalog.now() = mockable.now();
     assert current_date = mockable.current_date();
 
+    create schema test__schema;
+    create function test__schema.func() returns int return 8;
+    perform wrap_function('test__schema.func()');
+
     --
     -- Now, let's demonstrate how to use the `search_path` to alltogether skip the mocking layer…
     --
@@ -338,7 +405,7 @@ begin
     perform set_config('search_path', 'pg_catalog', true);
     assert now() = _now;
 
-    perform set_config('search_path', 'mockable,pg_catalog', true);
+    perform set_config('search_path', 'mockable, pg_catalog', true);
     assert now() = '2022-01-02 10:20'::timestamptz;
 
     raise transaction_rollback;
@@ -358,32 +425,44 @@ Procedure arguments:
 
 Procedure-local settings:
 
-  *  `SET search_path TO mockable, public, pg_temp`
+  *  `SET search_path TO pg_catalog`
 
-#### Procedure: `wrap_function (regprocedure)`
+#### Function: `wrap_function (regprocedure, mock_memory_duration)`
 
-Procedure arguments:
+Function arguments:
 
 | Arg. # | Arg. mode  | Argument name                                                     | Argument type                                                        | Default expression  |
 | ------ | ---------- | ----------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------- |
 |   `$1` |       `IN` | `function_signature$`                                             | `regprocedure`                                                       |  |
+|   `$2` |       `IN` | `mock_duration$`                                                  | `mock_memory_duration`                                               | `'TRANSACTION'::mock_memory_duration` |
 
-Procedure-local settings:
+Function return type: `mock_memory`
 
-  *  `SET search_path TO mockable, public, pg_temp`
+#### Function: `wrap_function (regprocedure, text, mock_memory_duration)`
 
-#### Procedure: `wrap_function (regprocedure, text)`
-
-Procedure arguments:
+Function arguments:
 
 | Arg. # | Arg. mode  | Argument name                                                     | Argument type                                                        | Default expression  |
 | ------ | ---------- | ----------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------- |
 |   `$1` |       `IN` | `function_signature$`                                             | `regprocedure`                                                       |  |
 |   `$2` |       `IN` | `create_function_statement$`                                      | `text`                                                               |  |
+|   `$3` |       `IN` | `mock_duration$`                                                  | `mock_memory_duration`                                               | `'TRANSACTION'::mock_memory_duration` |
 
-Procedure-local settings:
+Function return type: `mock_memory`
 
-  *  `SET search_path TO mockable, public, pg_temp`
+### Types
+
+The following extra types have been defined _besides_ the implicit composite types of the [tables](#tables) and [views](#views) in this extension.
+
+#### Enum type: `mock_memory_duration`
+
+```sql
+CREATE TYPE mock_memory_duration AS ENUM (
+    'TRANSACTION',
+    'SESSION',
+    'PERSISTENT'
+);
+```
 
 ## Colophon
 

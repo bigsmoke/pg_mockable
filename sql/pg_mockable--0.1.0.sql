@@ -112,36 +112,11 @@ $markdown$;
 
 --------------------------------------------------------------------------------------------------------------
 
-/*
-create cast (regprocedure as pg_proc)
-    with function pg_proc(regprocedure)
-    as assignment;
-comment
-    on cast (regprocedure as pg_proc)
-    is $markdown$
-Conveniently go from function calling signature description or OID (`regprocedure`) to `pg_catalog.pg_proc`.
-
-Examples:
-
-```sql
-select 'pg_catalog.current_setting(text, bool)'::regprocedure::pg_proc;
-select 'pg_catalog.now()'::regprocedure::pg_proc;
-```
-$markdown$;
-*/
-
---------------------------------------------------------------------------------------------------------------
-
 create table mock_memory (
     routine_signature regprocedure
         primary key
     ,unmock_statement text
         not null
---  ,mocked_at timestamptz
---  ,mocked_by name
---        default_current_user
---    ,mocked_type regtype
---    ,mocked_value text
 );
 
 --------------------------------------------------------------------------------------------------------------

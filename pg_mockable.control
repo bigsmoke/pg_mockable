@@ -1,5 +1,5 @@
-default_version = '0.1.8'
-requires = 'hstore'
+default_version = '0.2.0'
+requires = ''
 superuser = false
 relocatable = false
 schema = 'mockable'
