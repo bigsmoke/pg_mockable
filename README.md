@@ -1,8 +1,8 @@
 ---
 pg_extension_name: pg_mockable
-pg_extension_version: 0.2.0
-pg_readme_generated_at: 2023-03-02 18:28:12.576955+00
-pg_readme_version: 0.6.0
+pg_extension_version: 0.3.0
+pg_readme_generated_at: 2023-04-03 17:32:47.479952+01
+pg_readme_version: 0.6.1
 ---
 
 # `pg_mockable` – mock PostgreSQL functions
@@ -83,21 +83,20 @@ There are 1 tables that directly belong to the `pg_mockable` extension.
 
 The `mock_memory` table has 6 attributes:
 
-1. `mock_memory.routine_signature` `text`
+1. `mock_memory.routine_signature` `regprocedure`
 
-   The mockable routine name and `IN` argument types as consumable or producable by `regprocedure`.
-
-   This concerns the name of the _original_ routine that is made mockable by the
-   wrapper routine that is created upon insertion in this table (or replaced upon
-   update).  The routine name must be qualified unless if it is a routine from the
-   `pg_catalog` schema.
-
-   The reason that the function signature is stored as `text` instead of the
-   `regprocedure` type is restorability, because OIDs cannot be assumed to be the
-   same between clusters and `pg_dump`/`pg_restore` cycles.
+   The mockable routine `oid` (via its `regprocedure` alias).
 
    Check the official Postgres docs for more information about `regprocedure` and
    other [OID types](https://www.postgresql.org/docs/8.1/datatype-oid.html).
+
+   As evidenced by the [`test_dump_restore__pg_mockable()`
+   procedure](#procedure-test_dump_restore__pg_mockable-text), storing an
+   `regprocedure` is not a problem with `pg_dump`/`pg_restore`.  The same is true
+   for other `oid` alias types, because these are all serialized as their `text`
+   representation during `pg_dump` and then loaded from that text representation
+   again during `pg_restore`.  See https://dba.stackexchange.com/a/324899/79909 for
+   details.
 
    - `NOT NULL`
    - `PRIMARY KEY (routine_signature)`
@@ -236,7 +235,7 @@ Function arguments:
 | Arg. # | Arg. mode  | Argument name                                                     | Argument type                                                        | Default expression  |
 | ------ | ---------- | ----------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------- |
 |   `$1` |       `IN` | `routine_signature$`                                              | `regprocedure`                                                       |  |
-|   `$2` |       `IN` | `mock_value$`                                                     | `anyelement`                                                         |  |
+|   `$2` |    `INOUT` | `mock_value$`                                                     | `anyelement`                                                         |  |
 
 Function return type: `anyelement`
 
@@ -338,15 +337,15 @@ begin
         assert mockable.now() = '2022-01-02 10:30'::timestamptz;
 
     elsif test_stage$ = 'post-restore' then
-        assert exists (select from mock_memory where routine_signature = 'now()'::regprocedure::text);
+        assert exists (select from mock_memory where routine_signature = 'now()'::regprocedure);
         assert mockable.now() = pg_catalog.now(),
             'This wrapper function should have been restored to a wrapper of the original function.';
 
-        assert exists (select from mock_memory where routine_signature = 'test__schema.func()');
+        assert exists (select from mock_memory where routine_signature = 'test__schema.func()'::regprocedure);
         assert mockable.func() = 8,
             'The wrapper function should have been restored to a wrapper of the original function.';
 
-        assert exists (select from mock_memory where routine_signature = 'test__schema.func2()');
+        assert exists (select from mock_memory where routine_signature = 'test__schema.func2()'::regprocedure);
         assert mockable.func2() = array['boe', 'bah'],
             'The wrapper function should have been restored, and not unmocked.';
         call mockable.unmock('test__schema.func2()');
@@ -392,7 +391,7 @@ begin
 
     create schema test__schema;
     create function test__schema.func() returns int return 8;
-    perform wrap_function('test__schema.func()');
+    perform mockable.wrap_function('test__schema.func()');
 
     --
     -- Now, let's demonstrate how to use the `search_path` to alltogether skip the mocking layer…
@@ -400,13 +399,41 @@ begin
 
     _now := now();  -- just to not have to use qualified names
 
-    perform mockable.mock('now()', '2022-01-02 10:20'::timestamptz);
+    perform mockable.mock('pg_catalog.now()', '2022-01-02 10:20'::timestamptz);
 
     perform set_config('search_path', 'pg_catalog', true);
     assert now() = _now;
 
     perform set_config('search_path', 'mockable, pg_catalog', true);
     assert now() = '2022-01-02 10:20'::timestamptz;
+
+    <<recursive_mock_attempt>>
+    begin
+        assert current_schema = 'mockable';
+        assert 'now()'::regprocedure = 'mockable.now()'::regprocedure;
+        assert 'now()'::regprocedure != 'pg_catalog.now()'::regprocedure;
+
+        perform mockable.mock('now()', '2021-01-01 00:00'::timestamptz);
+
+        raise assert_failure using
+            message = 'Mocking an unwrapped function should have been forbidden.';
+    exception
+        when no_data_found then  -- Good.
+    end recursive_mock_attempt;
+
+    <<recursive_wrap_attempt>>
+    begin
+        assert current_schema = 'mockable';
+        assert 'now()'::regprocedure = 'mockable.now()'::regprocedure;
+        assert 'now()'::regprocedure != 'pg_catalog.now()'::regprocedure;
+
+        perform mockable.wrap_function('now()');
+
+        raise assert_failure using
+            message = 'Wrapping a wrapper function should have been forbidden.';
+    exception
+        when invalid_recursion then  -- Good.
+    end recursive_wrap_attempt;
 
     raise transaction_rollback;
 exception
