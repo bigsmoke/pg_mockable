@@ -1,0 +1,4 @@
+default_version = 'constver'
+superuser = false
+relocatable = true
+requires = 'pg_mockable'

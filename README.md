@@ -1,7 +1,7 @@
 ---
 pg_extension_name: pg_mockable
-pg_extension_version: 0.3.0
-pg_readme_generated_at: 2023-04-03 17:32:47.479952+01
+pg_extension_version: 0.3.1
+pg_readme_generated_at: 2023-04-14 15:57:15.749943+01
 pg_readme_version: 0.6.1
 ---
 
@@ -81,7 +81,7 @@ There are 1 tables that directly belong to the `pg_mockable` extension.
 
 #### Table: `mock_memory`
 
-The `mock_memory` table has 6 attributes:
+The `mock_memory` table has 8 attributes:
 
 1. `mock_memory.routine_signature` `regprocedure`
 
@@ -101,17 +101,24 @@ The `mock_memory` table has 6 attributes:
    - `NOT NULL`
    - `PRIMARY KEY (routine_signature)`
 
-2. `mock_memory.return_type` `text`
+2. `mock_memory.mock_signature` `text`
+
+   The mock (wrapper) function its calling signature.
+
+   The `mock_signature`, contrary to `routine_signature`, is stored as `text`,
+   because we want to be able to set in the `BEFORE` trigger before the function
+   is actually created in the `AFTER` trigger.
+
+   - `NOT NULL`
+   - `UNIQUE (mock_signature)`
+
+3. `mock_memory.return_type` `text`
 
    - `NOT NULL`
 
-3. `mock_memory.unmock_statement` `text`
+4. `mock_memory.unmock_statement` `text`
 
    - `NOT NULL`
-
-4. `mock_memory.is_prewrapped_by_pg_mockable` `boolean`
-
-   - `DEFAULT false`
 
 5. `mock_memory.mock_value` `text`
 
@@ -119,6 +126,10 @@ The `mock_memory` table has 6 attributes:
 
    - `DEFAULT 'TRANSACTION'::text`
    - `CHECK (mock_duration = ANY (ARRAY['TRANSACTION'::text, 'PERSISTENT'::text]))`
+
+7. `mock_memory.pg_extension_name` `name`
+
+8. `mock_memory.pg_extension_version` `text`
 
 ### Routines
 
@@ -434,6 +445,9 @@ begin
     exception
         when invalid_recursion then  -- Good.
     end recursive_wrap_attempt;
+
+    create extension pg_mockable_dependent_test_extension
+        with version 'constver';
 
     raise transaction_rollback;
 exception
