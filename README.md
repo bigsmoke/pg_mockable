@@ -1,8 +1,8 @@
 ---
 pg_extension_name: pg_mockable
-pg_extension_version: 0.3.2
-pg_readme_generated_at: 2023-05-13 11:40:10.65408+01
-pg_readme_version: 0.6.2
+pg_extension_version: 0.3.3
+pg_readme_generated_at: 2023-05-13 16:31:19.642381+01
+pg_readme_version: 0.6.3
 ---
 
 # `pg_mockable` – mock PostgreSQL functions
@@ -72,7 +72,7 @@ The `mockable` schema belongs to the `pg_mockable` extension.
 Postgres (as of Pg 15) doesn't allow one to specify a _default_ schema, and do
 something like `schema = 'mockable'` combined with `relocatable = true` in the
 `.control` file.  Therefore I decided to choose the `mockable` schema name
-_for_ you, even though you might have very well preferred something shorted
+_for_ you, even though you might have very well preferred something shorter
 like `mock`, even shorter like `mck`, or more verbose such as `mock_objects`.
 
 ### Tables

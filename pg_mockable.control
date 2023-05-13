@@ -1,4 +1,4 @@
-default_version = '0.3.2'
+default_version = '0.3.3'
 requires = ''
 superuser = false
 relocatable = false
