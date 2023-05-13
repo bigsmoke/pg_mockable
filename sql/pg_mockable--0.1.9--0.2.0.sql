@@ -1,71 +1,9 @@
--- complain if script is sourced in psql, rather than via CREATE EXTENSION
+-- Complain if script is sourced in `psql`, rather than via `CREATE EXTENSION`
 \echo Use "CREATE EXTENSION pg_mockable" to load this file. \quit
 
 --------------------------------------------------------------------------------------------------------------
 
-comment on extension pg_mockable is
-$markdown$
-# `pg_mockable` – mock PostgreSQL functions
-
-The `pg_mockable` PostgreSQL extension can be used to create mockable versions
-of functions from other schemas.
-
-## Installation
-
-To make the extension files available to PostgreSQL:
-
-```
-make install
-```
-
-To make the extension available in the current database:
-
-```sql
-create extension pg_mockable cascade;
-```
-
-You _can_ install the extension into a different schema, but choose your schema
-name wisely, since `pg_mockable` is _not_ relocatable.
-
-## Usage
-
-First, use `mockable.wrap_function()` to create a very thin function wrapper for whichever function you
-wish to wrap:
-
-```sql
-call mockable.wrap_function('pg_catalog.now()`);
-```
-
-This call will bring into being: `mockable.now()`, which just does a `return pg_catalog.now()`.
-
-If, for some reason, this fails, you can specify the precise `CREATE OR REPLACE FUNCTION` statement as the
-second argument to `wrap_function()`:
-
-```sql
-call mockable.wrap_function('pg_catalog.now', $$
-create or replace function mockable.now()
-    returns timestamptz
-    stable
-    language sql
-    return pg_catalog.now();
-$$);
-```
-
-In fact, this example won't work, because `mockable.now()` _always_ exists,
-because the need to mock `now()` was the whole reason that this extension was
-created in the first place.  And `now()` is a special case, because, to mock
-`now()` effectively, a whole bunch of other current date-time retrieval
-functions have a mockable counterpart that all call the same `mockable.now()`
-function, so that mocking `pg_catalog.now()` _also_ effectively mocks
-`current_timestamp()`, etc.
-
-<?pg-readme-reference?>
-
-<?pg-readme-colophon?>
-$markdown$;
-
---------------------------------------------------------------------------------------------------------------
-
+-- Reformat comment.
 comment on schema mockable is
 $md$The `mockable` schema belongs to the `pg_mockable` extension.
 
@@ -78,73 +16,9 @@ $md$;
 
 --------------------------------------------------------------------------------------------------------------
 
-create function pg_mockable_readme()
-    returns text
-    volatile
-    set search_path from current
-    set pg_readme.include_view_definitions_like to 'true'
-    set pg_readme.include_routine_definitions_like to '{test__%}'
-    language plpgsql
-    as $plpgsql$
-declare
-    _readme text;
-begin
-    create extension if not exists pg_readme;
-
-    _readme := pg_extension_readme('pg_mockable'::name);
-
-    raise transaction_rollback;  -- to drop extension if we happened to `CREATE EXTENSION` for just this.
-exception
-    when transaction_rollback then
-        return _readme;
-end;
-$plpgsql$;
-
-comment on function pg_mockable_readme() is
-$md$Generates the text for a `README.md` in Markdown format with the help of the `pg_readme` extension.
-
-This function temporarily installs `pg_readme` if it is not already installed
-in the current database.
-$md$;
-
---------------------------------------------------------------------------------------------------------------
-
-do $$
-declare
-    _extension_name name := 'pg_mockable';
-    _setting_name text := _extension_name || '.readme_url';
-    _ddl_cmd_to_set_pg_readme_url text := format(
-        'ALTER DATABASE %I SET %s = %L'
-        ,current_database()
-        ,_setting_name
-        ,'https://github.com/bigsmoke/' || _extension_name || '/blob/master/README.md'
-    );
-begin
-    if (select rolsuper from pg_roles where rolname = current_user) then
-        execute _ddl_cmd_to_set_pg_readme_url;
-    else
-        -- We say `superuser = false` in the control file; so let's just whine a little instead of crashing.
-        raise warning using
-            message = format(
-                'Because you''re installing the `%I` extension as non-superuser and because you'
-                || ' are also not the owner of the `%I` DB, the database-level `%I` setting has'
-                || ' not been set.'
-                ,_extension_name
-                ,current_database()
-                ,_setting_name
-            )
-            ,detail = 'Settings of the form `<extension_name>.readme_url` are used by `pg_readme` to'
-                || ' cross-link between extensions their README files.'
-            ,hint = 'If you want full inter-extension README cross-linking, you can ask your friendly'
-                || E' neighbourhood DBA to execute the following statement:\n'
-                || _ddl_cmd_to_set_pg_readme_url || ';';
-    end if;
-end;
-$$;
-
---------------------------------------------------------------------------------------------------------------
-
-create function pg_mockable_meta_pgxn()
+-- Add recommended development package.
+-- Change entry `.sql` file.
+create or replace function pg_mockable_meta_pgxn()
     returns jsonb
     stable
     language sql
@@ -187,7 +61,7 @@ create function pg_mockable_meta_pgxn()
         ,'provides'
         ,('{
             "pg_mockable": {
-                "file": "pg_mockable--0.3.0.sql",
+                "file": "pg_mockable--0.2.0.sql",
                 "version": "' || (
                     select
                         pg_extension.extversion
@@ -228,31 +102,9 @@ create function pg_mockable_meta_pgxn()
         ]
     );
 
-comment on function pg_mockable_meta_pgxn() is
-$md$Returns the JSON meta data that has to go into the `META.json` file needed for [PGXN—PostgreSQL Extension Network](https://pgxn.org/) packages.
-
-The `Makefile` includes a recipe to allow the developer to: `make META.json` to
-refresh the meta file with the function's current output, including the
-`default_version`.
-
-`pg_mockable` can indeed be found on PGXN: https://pgxn.org/dist/pg_mockable/
-$md$;
-
 --------------------------------------------------------------------------------------------------------------
 
-create function pg_proc(regprocedure)
-    returns pg_proc
-    stable
-    language sql
-    return (
-        select
-            row(pg_proc.*)::pg_proc
-        from
-            pg_proc
-        where
-            oid = $1
-    );
-
+-- Reformat comment to have synopsis on first line.
 comment on function pg_proc(regprocedure) is
 $md$Conveniently go from function calling signature description or OID (`regprocedure`) to `pg_catalog.pg_proc`.
 
@@ -265,10 +117,7 @@ $md$;
 
 --------------------------------------------------------------------------------------------------------------
 
-create cast (regprocedure as pg_proc)
-    with function pg_proc(regprocedure)
-    as assignment;
-
+-- Reformat comment to have synopsis on first line.
 comment on cast (regprocedure as pg_proc) is
 $md$Conveniently go from function calling signature description or OID (`regprocedure`) to `pg_catalog.pg_proc`.
 
@@ -286,37 +135,41 @@ create type mock_memory_duration as enum ('TRANSACTION', 'SESSION', 'PERSISTENT'
 
 --------------------------------------------------------------------------------------------------------------
 
-create table mock_memory (
-    routine_signature regprocedure
-        primary key
-    ,return_type text
-        not null
-    ,unmock_statement text
-        not null
-    ,is_prewrapped_by_pg_mockable bool
-        default false
-    ,mock_value text
-    ,mock_duration text
+alter table mock_memory
+    alter column routine_signature
+        type text
+    ,add column return_type text
+    ,add column mock_value text
+    ,add column mock_duration text
         default 'TRANSACTION'
         check (mock_duration in ('TRANSACTION', 'PERSISTENT'))
-);
+;
 
 comment on column mock_memory.routine_signature is
-$md$The mockable routine `oid` (via its `regprocedure` alias).
+$md$The mockable routine name and `IN` argument types as consumable or producable by `regprocedure`.
+
+This concerns the name of the _original_ routine that is made mockable by the
+wrapper routine that is created upon insertion in this table (or replaced upon
+update).  The routine name must be qualified unless if it is a routine from the
+`pg_catalog` schema.
+
+The reason that the function signature is stored as `text` instead of the
+`regprocedure` type is restorability, because OIDs cannot be assumed to be the
+same between clusters and `pg_dump`/`pg_restore` cycles.
 
 Check the official Postgres docs for more information about `regprocedure` and
 other [OID types](https://www.postgresql.org/docs/8.1/datatype-oid.html).
-
-As evidenced by the [`test_dump_restore__pg_mockable()`
-procedure](#procedure-test_dump_restore__pg_mockable-text), storing an
-`regprocedure` is not a problem with `pg_dump`/`pg_restore`.  The same is true
-for other `oid` alias types, because these are all serialized as their `text`
-representation during `pg_dump` and then loaded from that text representation
-again during `pg_restore`.  See https://dba.stackexchange.com/a/324899/79909 for
-details.
 $md$;
 
-select pg_extension_config_dump('mock_memory', 'WHERE NOT is_prewrapped_by_pg_mockable');
+update
+    mock_memory
+set
+    return_type = pg_catalog.pg_get_function_result(routine_signature::regprocedure);
+;
+
+alter table mock_memory
+    alter column return_type
+        set not null;
 
 --------------------------------------------------------------------------------------------------------------
 
@@ -363,12 +216,6 @@ begin
 
         _pg_proc := mockable.pg_proc(_regprocedure);
 
-        if _pg_proc.pronamespace = 'mockable'::regnamespace then
-            raise invalid_recursion using
-                message = 'Cannot mock a mock routine itself.'
-                ,hint = 'You probably forgot to schema-qualify the routine name, while the `mockable`'
-                    || ' schema is in front of the schema with the object you wish to mock.';
-        end if;
         if _pg_proc.provariadic != 0 then
             raise feature_not_supported using
                 message = 'Dunno how to auto-wrap functions with variadic arguments.';
@@ -538,6 +385,10 @@ create constraint trigger reset_value
 
 --------------------------------------------------------------------------------------------------------------
 
+drop procedure wrap_function(regprocedure);
+
+--------------------------------------------------------------------------------------------------------------
+
 create function wrap_function(
         function_signature$ regprocedure
         ,create_function_statement$ text
@@ -551,7 +402,7 @@ begin atomic
     insert into mock_memory
         (routine_signature, unmock_statement, mock_duration)
     values
-        (function_signature$, create_function_statement$, mock_duration$)
+        (function_signature$::text, create_function_statement$, mock_duration$)
     returning
         *
     ;
@@ -571,7 +422,7 @@ begin atomic
     insert into mock_memory
         (routine_signature, mock_duration)
     values
-        (function_signature$, mock_duration$)
+        (function_signature$::text, mock_duration$)
     returning
         *
     ;
@@ -579,25 +430,9 @@ end;
 
 --------------------------------------------------------------------------------------------------------------
 
-create procedure unmock(
+create or replace function mock(
         routine_signature$ regprocedure
-    )
-    set search_path to pg_catalog
-    language plpgsql
-    as $plpgsql$
-begin
-    update  mockable.mock_memory
-    set     mock_value = null
-    where   routine_signature = routine_signature$
-    ;
-end;
-$plpgsql$;
-
---------------------------------------------------------------------------------------------------------------
-
-create function mock(
-        in routine_signature$ regprocedure
-        ,inout mock_value$ anyelement
+        ,mock_value$ anyelement
     )
     returns anyelement
     volatile
@@ -607,51 +442,24 @@ create function mock(
 begin
     update  mockable.mock_memory
     set     mock_value = mock_value$
-    where   routine_signature = routine_signature$
+    where   routine_signature = routine_signature$::text
     ;
 
-    if not found then
-        raise no_data_found using
-            message = format(
-                'No `mock_memory` record of `%I` found.'
-                ,routine_signature$
-            )
-            ,hint = 'You should probably call the `wrap_function()` function first.';
-    end if;
+    return mock_value$;
 end;
 $plpgsql$;
 
 --------------------------------------------------------------------------------------------------------------
 
-insert into mock_memory (
-    routine_signature
-    ,is_prewrapped_by_pg_mockable
-)
-values (
-    'pg_catalog.now()'
-    ,true
-);
-
---------------------------------------------------------------------------------------------------------------
-
-create function transaction_timestamp()
-    returns timestamptz
-    stable
-    language sql
-    return mockable.now();
-
+-- Reformat comment to have synopsis on first line.
 comment on function transaction_timestamp() is
 $md$`transaction_timestamp()` is simply an alias for `mockable.now()`.  If you wish to mock it, mock `mockable.now()`.
 $md$;
 
 --------------------------------------------------------------------------------------------------------------
 
-create function "current_timestamp"()
-    returns timestamptz
-    stable
-    language sql
-    return mockable.now();
-
+-- Reformat comment to have synopsis on first line.
+-- Document lack of precision parameter.
 comment on function "current_timestamp"() is
 $md$`current_timestamp()` is derived from `mockable.now()`.  To mock it, mock `pg_catalog.now()`.
 
@@ -661,24 +469,16 @@ $md$;
 
 --------------------------------------------------------------------------------------------------------------
 
-create function "current_date"()
-    returns date
-    stable
-    language sql
-    return mockable.now()::date;
-
+-- Reformat comment to have synopsis on first line.
+-- Document lack of precision parameter.
 comment on function "current_date"() is
 $md$`current_date()` is derived from `mockable.now()`.  To mock it, mock `pg_catalog.now()`.
 $md$;
 
 --------------------------------------------------------------------------------------------------------------
 
-create function "current_time"()
-    returns timetz
-    stable
-    language sql
-    return mockable.now()::timetz;
-
+-- Reformat comment to have synopsis on first line.
+-- Document lack of precision parameter.
 comment on function "current_time"() is
 $md$`current_time()` is derived from `mockable.now()`.  To mock it, mock `pg_catalog.now()`.
 
@@ -688,12 +488,8 @@ $md$;
 
 --------------------------------------------------------------------------------------------------------------
 
-create function "localtime"()
-    returns time
-    stable
-    language sql
-    return mockable.now()::time;
-
+-- Reformat comment to have synopsis on first line.
+-- Document lack of precision parameter.
 comment on function "localtime"() is
 $md$`localtime()` is derived from `mockable.now()`.  To mock it, mock `pg_catalog.now()`.
 
@@ -703,36 +499,15 @@ $md$;
 
 --------------------------------------------------------------------------------------------------------------
 
-create function "localtimestamp"()
-    returns timestamp
-    stable
-    language sql
-    return mockable.now()::timestamp;
-comment
-    on function "localtimestamp"()
-    is $md$
-`localtimestamp()` is derived from `mockable.now()`.  To mock it, mock `pg_catalog.now()`.
-
-Unlike its standard (PostgreSQL) counterpart, `localtimestamp()` does not support a precision parameter.
-Feel free to implement it.
-$md$;
-
---------------------------------------------------------------------------------------------------------------
-
-create function timeofday()
-    returns text
-    stable
-    set datestyle to 'Postgres'
-    language sql
-    return mockable.now()::text;
-
+-- Reformat comment to have synopsis on first line.
+-- Document lack of precision parameter.
 comment on function timeofday() is
 $md$`timeofday()` is derived from `mockable.now()`.  To mock it, mock `pg_catalog.now()`.
 $md$;
 
 --------------------------------------------------------------------------------------------------------------
 
-create procedure test__pg_mockable()
+create or replace procedure test__pg_mockable()
     set search_path to pg_catalog
     set plpgsql.check_asserts to true
     set pg_readme.include_this_routine_definition to true
@@ -767,41 +542,13 @@ begin
 
     _now := now();  -- just to not have to use qualified names
 
-    perform mockable.mock('pg_catalog.now()', '2022-01-02 10:20'::timestamptz);
+    perform mockable.mock('now()', '2022-01-02 10:20'::timestamptz);
 
     perform set_config('search_path', 'pg_catalog', true);
     assert now() = _now;
 
     perform set_config('search_path', 'mockable, pg_catalog', true);
     assert now() = '2022-01-02 10:20'::timestamptz;
-
-    <<recursive_mock_attempt>>
-    begin
-        assert current_schema = 'mockable';
-        assert 'now()'::regprocedure = 'mockable.now()'::regprocedure;
-        assert 'now()'::regprocedure != 'pg_catalog.now()'::regprocedure;
-
-        perform mockable.mock('now()', '2021-01-01 00:00'::timestamptz);
-
-        raise assert_failure using
-            message = 'Mocking an unwrapped function should have been forbidden.';
-    exception
-        when no_data_found then  -- Good.
-    end recursive_mock_attempt;
-
-    <<recursive_wrap_attempt>>
-    begin
-        assert current_schema = 'mockable';
-        assert 'now()'::regprocedure = 'mockable.now()'::regprocedure;
-        assert 'now()'::regprocedure != 'pg_catalog.now()'::regprocedure;
-
-        perform mockable.wrap_function('now()');
-
-        raise assert_failure using
-            message = 'Wrapping a wrapper function should have been forbidden.';
-    exception
-        when invalid_recursion then  -- Good.
-    end recursive_wrap_attempt;
 
     raise transaction_rollback;
 exception
@@ -811,7 +558,7 @@ $plpgsql$;
 
 --------------------------------------------------------------------------------------------------------------
 
-create procedure test_dump_restore__pg_mockable(test_stage$ text)
+create or replace procedure test_dump_restore__pg_mockable(test_stage$ text)
     set search_path to pg_catalog, mockable
     set plpgsql.check_asserts to true
     set pg_readme.include_this_routine_definition to true
@@ -839,15 +586,15 @@ begin
         assert mockable.now() = '2022-01-02 10:30'::timestamptz;
 
     elsif test_stage$ = 'post-restore' then
-        assert exists (select from mock_memory where routine_signature = 'now()'::regprocedure);
+        assert exists (select from mock_memory where routine_signature = 'now()'::regprocedure::text);
         assert mockable.now() = pg_catalog.now(),
             'This wrapper function should have been restored to a wrapper of the original function.';
 
-        assert exists (select from mock_memory where routine_signature = 'test__schema.func()'::regprocedure);
+        assert exists (select from mock_memory where routine_signature = 'test__schema.func()');
         assert mockable.func() = 8,
             'The wrapper function should have been restored to a wrapper of the original function.';
 
-        assert exists (select from mock_memory where routine_signature = 'test__schema.func2()'::regprocedure);
+        assert exists (select from mock_memory where routine_signature = 'test__schema.func2()');
         assert mockable.func2() = array['boe', 'bah'],
             'The wrapper function should have been restored, and not unmocked.';
         call mockable.unmock('test__schema.func2()');

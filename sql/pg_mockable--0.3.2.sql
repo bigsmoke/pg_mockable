@@ -1,4 +1,4 @@
--- complain if script is sourced in psql, rather than via CREATE EXTENSION
+-- Complain if script is sourced in `psql`, rather than via `CREATE EXTENSION`
 \echo Use "CREATE EXTENSION pg_mockable" to load this file. \quit
 
 --------------------------------------------------------------------------------------------------------------
@@ -61,6 +61,22 @@ function, so that mocking `pg_catalog.now()` _also_ effectively mocks
 
 <?pg-readme-reference?>
 
+## Authors and contributors
+
+* [Rowan](https://www.bigsmoke.us/) originated this extension in 2022 while
+  developing the PostgreSQL backend for the [FlashMQ SaaS MQTT cloud
+  broker](https://www.flashmq.com/).  Rowan does not like to see himself as a
+  tech person or a tech writer, but, much to his chagrin, [he
+  _is_](https://blog.bigsmoke.us/category/technology). Some of his chagrin
+  about his disdain for the IT industry he poured into a book: [_Why
+  Programming Still Sucks_](https://www.whyprogrammingstillsucks.com/).  Much
+  more than a “tech bro”, he identifies as a garden gnome, fairy and ork rolled
+  into one, and his passion is really to [regreen and reenchant his
+  environment](https://sapienshabitat.com/).  One of his proudest achievements
+  is to be the third generation ecological gardener to grow the wild garden
+  around his beautiful [family holiday home in the forest of Norg, Drenthe,
+  the Netherlands](https://www.schuilplaats-norg.nl/) (available for rent!).
+
 <?pg-readme-colophon?>
 $markdown$;
 
@@ -89,7 +105,8 @@ create function pg_mockable_readme()
 declare
     _readme text;
 begin
-    create extension if not exists pg_readme;
+    create extension if not exists pg_readme
+        with cascade;
 
     _readme := pg_extension_readme('pg_mockable'::name);
 
@@ -187,7 +204,7 @@ create function pg_mockable_meta_pgxn()
         ,'provides'
         ,('{
             "pg_mockable": {
-                "file": "pg_mockable--0.3.0.sql",
+                "file": "pg_mockable--0.3.2.sql",
                 "version": "' || (
                     select
                         pg_extension.extversion
@@ -289,16 +306,19 @@ create type mock_memory_duration as enum ('TRANSACTION', 'SESSION', 'PERSISTENT'
 create table mock_memory (
     routine_signature regprocedure
         primary key
+    ,mock_signature text
+        not null
+        unique
     ,return_type text
         not null
     ,unmock_statement text
         not null
-    ,is_prewrapped_by_pg_mockable bool
-        default false
     ,mock_value text
     ,mock_duration text
         default 'TRANSACTION'
         check (mock_duration in ('TRANSACTION', 'PERSISTENT'))
+    ,pg_extension_name name
+    ,pg_extension_version text
 );
 
 comment on column mock_memory.routine_signature is
@@ -316,7 +336,15 @@ again during `pg_restore`.  See https://dba.stackexchange.com/a/324899/79909 for
 details.
 $md$;
 
-select pg_extension_config_dump('mock_memory', 'WHERE NOT is_prewrapped_by_pg_mockable');
+comment on column mock_memory.mock_signature is
+$md$The mock (wrapper) function its calling signature.
+
+The `mock_signature`, contrary to `routine_signature`, is stored as `text`,
+because we want to be able to set in the `BEFORE` trigger before the function
+is actually created in the `AFTER` trigger.
+$md$;
+
+select pg_extension_config_dump('mock_memory', 'WHERE pg_extension_name IS NULL');
 
 --------------------------------------------------------------------------------------------------------------
 
@@ -330,6 +358,7 @@ declare
     _regtype regtype;
     _pg_proc pg_proc;
     _copying bool;
+    _extension_context_detection_object name;
 begin
     assert tg_when = 'BEFORE';
     assert tg_op in ('INSERT', 'UPDATE');
@@ -353,6 +382,37 @@ begin
             'Please let _me_ (the `%I` on `%I.%I`) figure out the return type for `%s` myself.'
             ,tg_name, tg_table_schema, tg_table_name, NEW.routine_signature
         );
+    end if;
+
+    if tg_op = 'INSERT' then
+        -- The extension context may be:
+        --    a) outside of a `CREATE EXTENSION` / `ALTER EXTENSION` context (`_extension_context IS NULL`);
+        --    b) inside the `CREATE EXTENSION` / `ALTER EXTENSION` context of the extension owning the config
+        --       table to which this trigger is attached; or
+        --    c) inside the `CREATE EXTENSION` / `ALTER EXTENSION` context of extension that changes settings
+        --       in another extension's configuration table.
+        _extension_context_detection_object := format(
+            'extension_context_detector_%s'
+            ,floor(pg_catalog.random() * 1000)
+        );
+        execute format('CREATE TEMPORARY TABLE %I (col int) ON COMMIT DROP', _extension_context_detection_object);
+        select
+            pg_extension.extname
+            ,pg_extension.extversion
+        into
+            NEW.pg_extension_name
+            ,NEW.pg_extension_version
+        from
+            pg_catalog.pg_depend
+        inner join
+            pg_catalog.pg_extension
+            on pg_extension.oid = pg_depend.refobjid
+        where
+            pg_depend.classid = 'pg_catalog.pg_class'::regclass
+            and pg_depend.objid = _extension_context_detection_object::regclass
+            and pg_depend.refclassid = 'pg_catalog.pg_extension'::regclass
+        ;
+        execute format('DROP TABLE %I', _extension_context_detection_object);
     end if;
 
     if not _copying and (tg_op = 'INSERT' or NEW.routine_signature != OLD.routine_signature) then
@@ -385,12 +445,14 @@ begin
             raise feature_not_supported using
                 message = 'Dunno how to auto-wrap functions with named arguments.';
         end if;
+
+        NEW.mock_signature := 'mockable.' || quote_ident(_pg_proc.proname)
+            || '(' || pg_get_function_arguments(_pg_proc.oid) || ')';
     end if;
 
     if NEW.unmock_statement is null then
         NEW.unmock_statement := 'CREATE OR REPLACE FUNCTION '
-            || 'mockable.' || quote_ident(_pg_proc.proname)
-            || '(' || pg_get_function_arguments(_regprocedure) || ')'
+            || NEW.mock_signature
             || ' RETURNS ' || pg_get_function_result(_regprocedure)
             || case when _pg_proc.proleakproof then ' LEAKPROOF' else '' end
             || case when _pg_proc.proisstrict then ' STRICT' else '' end
@@ -429,7 +491,15 @@ declare
     _mock_mem mockable.mock_memory;
     _proc_schema name := 'mockable';
     _pg_proc pg_proc := mockable.pg_proc(NEW.routine_signature::regprocedure);
-    _signature_changed bool;
+    _signature_changed bool := tg_op = 'UPDATE' and (
+        NEW.routine_signature != OLD.routine_signature
+        or NEW.unmock_statement != OLD.unmock_statement
+    );
+    _must_mock bool := NEW.mock_value is not null
+        and (_signature_changed or NEW.mock_value is distinct from OLD.mock_value);
+    _must_unmock bool := NEW.mock_value is null and (OLD.mock_value is not null or tg_op = 'INSERT');
+    _extension_context_detection_object name;
+    _extension_context name;
 begin
     assert tg_when = 'AFTER';
     assert tg_op in ('INSERT', 'UPDATE');
@@ -437,38 +507,82 @@ begin
     assert tg_table_schema = 'mockable';
     assert tg_table_name = 'mock_memory';
 
-    _signature_changed := tg_op = 'UPDATE' and (
-        NEW.routine_signature != OLD.routine_signature
-        or NEW.unmock_statement != OLD.unmock_statement
+    -- The extension context may be:
+    --    a) outside of a `CREATE EXTENSION` / `ALTER EXTENSION` context (`_extension_context IS NULL`);
+    --    b) inside the `CREATE EXTENSION` / `ALTER EXTENSION` context of the extension owning the config
+    --       table to which this trigger is attached; or
+    --    c) inside the `CREATE EXTENSION` / `ALTER EXTENSION` context of extension that changes settings in
+    --       another extension's configuration table.
+    _extension_context_detection_object := format(
+        'extension_context_detector_%s'
+        ,floor(pg_catalog.random() * 1000)
     );
+    execute format('CREATE TEMPORARY TABLE %I (col int) ON COMMIT DROP', _extension_context_detection_object);
+    select
+        pg_extension.extname
+    into
+        _extension_context
+    from
+        pg_catalog.pg_depend
+    inner join
+        pg_catalog.pg_extension
+        on pg_extension.oid = pg_depend.refobjid
+    where
+        pg_depend.classid = 'pg_catalog.pg_class'::regclass
+        and pg_depend.objid = _extension_context_detection_object::regclass
+        and pg_depend.refclassid = 'pg_catalog.pg_extension'::regclass
+    ;
+    execute format('DROP TABLE %I', _extension_context_detection_object);
 
     if _signature_changed then
-        execute 'DROP FUNCTION mockable.' || quote_ident(_pg_proc.proname);
+        execute 'DROP FUNCTION ' || NEW.mock_signature;
     end if;
 
-    if NEW.mock_value is not null
-        and (_signature_changed or NEW.mock_value is distinct from OLD.mock_value)
-    then
-        execute 'CREATE OR REPLACE '
-            || case _pg_proc.prokind
-                when 'f' then 'FUNCTION'
-                when 'p' then 'PROCEDURE'
-            end
-            || ' '
-            || 'mockable.' || quote_ident(_pg_proc.proname)
-            || '(' || pg_get_function_arguments(_pg_proc.oid) || ')'
-            || ' RETURNS ' || pg_get_function_result(_pg_proc.oid)
-            || ' LANGUAGE SQL'
-            || ' IMMUTABLE'
-            || ' SET search_path FROM CURRENT'
-            || ' RETURN ' || quote_literal(NEW.mock_value)
-            || '::' || pg_get_function_result(_pg_proc.oid)
-        ;
-    elsif NEW.mock_value is null and (OLD.mock_value is not null or tg_op = 'INSERT') then
-        execute NEW.unmock_statement;
+    if _must_mock or _must_unmock then
+        if NEW.pg_extension_name is not null and _extension_context is distinct from NEW.pg_extension_name
+        then
+            execute 'ALTER EXTENSION ' || NEW.pg_extension_name || ' DROP '
+                || case _pg_proc.prokind when 'f' then 'FUNCTION' when 'p' then 'PROCEDURE' end
+                || ' ' || NEW.mock_signature;
+            if _extension_context is not null then
+                execute 'ALTER EXTENSION ' || _extension_context || ' ADD '
+                    || case _pg_proc.prokind when 'f' then 'FUNCTION' when 'p' then 'PROCEDURE' end
+                    || ' ' || NEW.mock_signature;
+            end if;
+        end if;
 
-        execute 'COMMENT ON FUNCTION mockable.' || quote_ident(_pg_proc.proname)
-            || ' IS $md$Mockable wrapper function for `' || NEW.routine_signature || '`.$md$';
+        if _must_mock then
+            execute 'CREATE OR REPLACE '
+                || case _pg_proc.prokind
+                    when 'f' then 'FUNCTION'
+                    when 'p' then 'PROCEDURE'
+                end
+                || ' ' || NEW.mock_signature
+                || ' RETURNS ' || pg_get_function_result(_pg_proc.oid)
+                || ' LANGUAGE SQL'
+                || ' IMMUTABLE'
+                || ' SET search_path FROM CURRENT'
+                || ' RETURN ' || quote_literal(NEW.mock_value)
+                || '::' || pg_get_function_result(_pg_proc.oid)
+            ;
+        elsif _must_unmock then
+            execute NEW.unmock_statement;
+
+            execute 'COMMENT ON FUNCTION mockable.' || quote_ident(_pg_proc.proname)
+                || ' IS $md$Mockable wrapper function for `' || NEW.routine_signature || '`.$md$';
+        end if;
+
+        if NEW.pg_extension_name is not null and _extension_context is distinct from NEW.pg_extension_name
+        then
+            if _extension_context is not null then
+                execute 'ALTER EXTENSION ' || _extension_context || ' DROP '
+                    || case _pg_proc.prokind when 'f' then 'FUNCTION' when 'p' then 'PROCEDURE' end
+                    || ' ' || NEW.mock_signature;
+            end if;
+            execute 'ALTER EXTENSION ' || NEW.pg_extension_name || ' ADD '
+                || case _pg_proc.prokind when 'f' then 'FUNCTION' when 'p' then 'PROCEDURE' end
+                || ' ' || NEW.mock_signature;
+        end if;
     end if;
 
     execute 'GRANT EXECUTE ON '
@@ -623,14 +737,11 @@ $plpgsql$;
 
 --------------------------------------------------------------------------------------------------------------
 
-insert into mock_memory (
-    routine_signature
-    ,is_prewrapped_by_pg_mockable
-)
-values (
-    'pg_catalog.now()'
-    ,true
-);
+insert into mock_memory
+    (routine_signature)
+values
+    ('pg_catalog.now()')
+;
 
 --------------------------------------------------------------------------------------------------------------
 
@@ -802,6 +913,9 @@ begin
     exception
         when invalid_recursion then  -- Good.
     end recursive_wrap_attempt;
+
+    create extension pg_mockable_dependent_test_extension
+        with version 'constver';
 
     raise transaction_rollback;
 exception

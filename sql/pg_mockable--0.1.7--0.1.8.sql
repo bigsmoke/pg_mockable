@@ -1,4 +1,4 @@
--- complain if script is sourced in psql, rather than via CREATE EXTENSION
+-- Complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION pg_mockable" to load this file. \quit
 
 --------------------------------------------------------------------------------------------------------------
@@ -62,8 +62,8 @@ select pg_extension_config_dump('mock_memory', 'WHERE NOT is_prewrapped_by_pg_mo
 create cast (regprocedure as pg_proc)
     with function pg_proc(regprocedure)
     as assignment;
-comment
-    on cast (regprocedure as pg_proc)
+
+comment on cast (regprocedure as pg_proc)
     is $markdown$
 Conveniently go from function calling signature description or OID (`regprocedure`) to `pg_catalog.pg_proc`.
 
