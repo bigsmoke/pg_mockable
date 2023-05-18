@@ -1,7 +1,7 @@
 ---
 pg_extension_name: pg_mockable
-pg_extension_version: 0.3.3
-pg_readme_generated_at: 2023-05-13 16:31:19.642381+01
+pg_extension_version: 0.4.0
+pg_readme_generated_at: 2023-05-18 22:21:09.095289+01
 pg_readme_version: 0.6.3
 ---
 
@@ -417,6 +417,27 @@ begin
 
     perform set_config('search_path', 'mockable, pg_catalog', true);
     assert now() = '2022-01-02 10:20'::timestamptz;
+
+    <<test_that_grants_are_copied>>
+    begin
+        create role underling;
+
+        create function test__schema.private_func() returns int return 100;
+        revoke execute on function test__schema.private_func() from public;
+        assert not has_function_privilege('underling', 'test__schema.private_func()', 'EXECUTE');
+
+        perform mockable.wrap_function('test__schema.private_func()');
+        assert not has_function_privilege('underling', 'mockable.private_func()', 'EXECUTE');
+        perform mockable.mock('test__schema.private_func()', 1000::int);
+        assert not has_function_privilege('underling', 'mockable.private_func()', 'EXECUTE');
+
+        grant execute on function test__schema.private_func() to underling;
+        assert has_function_privilege('underling', 'test__schema.private_func()', 'EXECUTE');
+
+        perform mockable.mock('test__schema.private_func()', 1000::int);
+        assert has_function_privilege('underling', 'mockable.private_func()', 'EXECUTE');
+
+    end test_that_grants_are_copied;
 
     <<recursive_mock_attempt>>
     begin

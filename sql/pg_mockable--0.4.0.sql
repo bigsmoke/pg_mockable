@@ -1,4 +1,4 @@
--- complain if script is sourced in psql, rather than via CREATE EXTENSION
+-- Complain if script is sourced in `psql`, rather than via `CREATE EXTENSION`.
 \echo Use "CREATE EXTENSION pg_mockable" to load this file. \quit
 
 --------------------------------------------------------------------------------------------------------------
@@ -61,6 +61,22 @@ function, so that mocking `pg_catalog.now()` _also_ effectively mocks
 
 <?pg-readme-reference?>
 
+## Authors and contributors
+
+* [Rowan](https://www.bigsmoke.us/) originated this extension in 2022 while
+  developing the PostgreSQL backend for the [FlashMQ SaaS MQTT cloud
+  broker](https://www.flashmq.com/).  Rowan does not like to see himself as a
+  tech person or a tech writer, but, much to his chagrin, [he
+  _is_](https://blog.bigsmoke.us/category/technology). Some of his chagrin
+  about his disdain for the IT industry he poured into a book: [_Why
+  Programming Still Sucks_](https://www.whyprogrammingstillsucks.com/).  Much
+  more than a “tech bro”, he identifies as a garden gnome, fairy and ork rolled
+  into one, and his passion is really to [regreen and reenchant his
+  environment](https://sapienshabitat.com/).  One of his proudest achievements
+  is to be the third generation ecological gardener to grow the wild garden
+  around his beautiful [family holiday home in the forest of Norg, Drenthe,
+  the Netherlands](https://www.schuilplaats-norg.nl/) (available for rent!).
+
 <?pg-readme-colophon?>
 $markdown$;
 
@@ -72,7 +88,7 @@ $md$The `mockable` schema belongs to the `pg_mockable` extension.
 Postgres (as of Pg 15) doesn't allow one to specify a _default_ schema, and do
 something like `schema = 'mockable'` combined with `relocatable = true` in the
 `.control` file.  Therefore I decided to choose the `mockable` schema name
-_for_ you, even though you might have very well preferred something shorted
+_for_ you, even though you might have very well preferred something shorter
 like `mock`, even shorter like `mck`, or more verbose such as `mock_objects`.
 $md$;
 
@@ -188,7 +204,7 @@ create function pg_mockable_meta_pgxn()
         ,'provides'
         ,('{
             "pg_mockable": {
-                "file": "pg_mockable--0.3.1.sql",
+                "file": "pg_mockable--0.4.0.sql",
                 "version": "' || (
                     select
                         pg_extension.extversion
@@ -484,6 +500,7 @@ declare
     _must_unmock bool := NEW.mock_value is null and (OLD.mock_value is not null or tg_op = 'INSERT');
     _extension_context_detection_object name;
     _extension_context name;
+    _proc_grantee oid;
 begin
     assert tg_when = 'AFTER';
     assert tg_op in ('INSERT', 'UPDATE');
@@ -569,14 +586,40 @@ begin
         end if;
     end if;
 
-    execute 'GRANT EXECUTE ON '
-        || case _pg_proc.prokind
-            when 'f' then 'FUNCTION'
-            when 'p' then 'PROCEDURE'
-        end
-        || ' mockable.' || quote_ident(_pg_proc.proname)
-        || ' TO public'
-        ;
+    if _pg_proc.proacl is not null then
+        execute 'REVOKE EXECUTE ON '
+                || case _pg_proc.prokind
+                    when 'f' then 'FUNCTION'
+                    when 'p' then 'PROCEDURE'
+                end
+                || ' mockable.' || quote_ident(_pg_proc.proname)
+                || ' FROM PUBLIC';
+
+        for _proc_grantee in
+            select
+                routine_grant.grantee
+            from
+                pg_catalog.pg_proc
+            cross join
+                pg_catalog.aclexplode(pg_proc.proacl) as routine_grant
+            where
+                pg_proc.oid = NEW.routine_signature
+        loop
+            execute 'GRANT EXECUTE ON '
+                || case _pg_proc.prokind
+                    when 'f' then 'FUNCTION'
+                    when 'p' then 'PROCEDURE'
+                end
+                || ' mockable.' || quote_ident(_pg_proc.proname)
+                || ' TO '
+                || case
+                    when _proc_grantee = 0
+                    then 'PUBLIC'
+                    else _proc_grantee::regrole::text
+                end
+                ;
+        end loop;
+    end if;
 
     return null;
 end;
@@ -868,6 +911,27 @@ begin
 
     perform set_config('search_path', 'mockable, pg_catalog', true);
     assert now() = '2022-01-02 10:20'::timestamptz;
+
+    <<test_that_grants_are_copied>>
+    begin
+        create role underling;
+
+        create function test__schema.private_func() returns int return 100;
+        revoke execute on function test__schema.private_func() from public;
+        assert not has_function_privilege('underling', 'test__schema.private_func()', 'EXECUTE');
+
+        perform mockable.wrap_function('test__schema.private_func()');
+        assert not has_function_privilege('underling', 'mockable.private_func()', 'EXECUTE');
+        perform mockable.mock('test__schema.private_func()', 1000::int);
+        assert not has_function_privilege('underling', 'mockable.private_func()', 'EXECUTE');
+
+        grant execute on function test__schema.private_func() to underling;
+        assert has_function_privilege('underling', 'test__schema.private_func()', 'EXECUTE');
+
+        perform mockable.mock('test__schema.private_func()', 1000::int);
+        assert has_function_privilege('underling', 'mockable.private_func()', 'EXECUTE');
+
+    end test_that_grants_are_copied;
 
     <<recursive_mock_attempt>>
     begin

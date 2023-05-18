@@ -446,7 +446,7 @@ begin
             when 'f' then 'FUNCTION'
             when 'p' then 'PROCEDURE'
         end
-        || ' ' || routine_signature$::text || ' TO public';  -- TODO: duplicate original GRANTs
+        || ' ' || routine_signature$::text || ' TO public';
     execute _grant_ddl;
 
     return mock_value$;

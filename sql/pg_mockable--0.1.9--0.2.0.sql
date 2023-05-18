@@ -325,7 +325,6 @@ begin
         end
         || ' mockable.' || quote_ident(_pg_proc.proname)
         || ' TO public'
-        -- TODO: duplicate original GRANTs
         ;
 
     return null;
