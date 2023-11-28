@@ -1,8 +1,8 @@
 ---
 pg_extension_name: pg_mockable
-pg_extension_version: 0.4.0
-pg_readme_generated_at: 2023-05-18 22:21:09.095289+01
-pg_readme_version: 0.6.3
+pg_extension_version: 0.4.1
+pg_readme_generated_at: 2023-11-28 17:24:29.787282+00
+pg_readme_version: 0.6.4
 ---
 
 # `pg_mockable` – mock PostgreSQL functions
