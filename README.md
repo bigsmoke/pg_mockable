@@ -1,8 +1,8 @@
 ---
 pg_extension_name: pg_mockable
-pg_extension_version: 0.4.1
-pg_readme_generated_at: 2023-11-28 17:24:29.787282+00
-pg_readme_version: 0.6.4
+pg_extension_version: 1.0.0
+pg_readme_generated_at: 2024-01-17 11:57:36.511466+00
+pg_readme_version: 0.6.5
 ---
 
 # `pg_mockable` – mock PostgreSQL functions
@@ -24,25 +24,24 @@ To make the extension available in the current database:
 create extension pg_mockable cascade;
 ```
 
-You _can_ install the extension into a different schema, but choose your schema
-name wisely, since `pg_mockable` is _not_ relocatable.
-
 ## Usage
 
 First, use `mockable.wrap_function()` to create a very thin function wrapper for whichever function you
 wish to wrap:
 
 ```sql
-call mockable.wrap_function('pg_catalog.now()`);
+select mockable.wrap_function('pg_catalog.now()`);
 ```
 
-This call will bring into being: `mockable.now()`, which just does a `return pg_catalog.now()`.
+This call will bring into being: `mockable.now()`, which just does a `return
+pg_catalog.now()`.  In other words: the wrapper function, when not mocking,
+calls the original function.
 
 If, for some reason, this fails, you can specify the precise `CREATE OR REPLACE FUNCTION` statement as the
 second argument to `wrap_function()`:
 
 ```sql
-call mockable.wrap_function('pg_catalog.now', $$
+select mockable.wrap_function('pg_catalog.now', $$
 create or replace function mockable.now()
     returns timestamptz
     stable
@@ -50,14 +49,35 @@ create or replace function mockable.now()
     return pg_catalog.now();
 $$);
 ```
-
-In fact, this example won't work, because `mockable.now()` _always_ exists,
+(In fact, this example is a bit contrived; `mockable.now()` always pre-exists,
 because the need to mock `now()` was the whole reason that this extension was
 created in the first place.  And `now()` is a special case, because, to mock
 `now()` effectively, a whole bunch of other current date-time retrieval
 functions have a mockable counterpart that all call the same `mockable.now()`
 function, so that mocking `pg_catalog.now()` _also_ effectively mocks
-`current_timestamp()`, etc.
+`current_timestamp()`, etc.)
+
+After mocking a function, you can use it as you would the original function.
+
+### `search_path` and the `mockable` schema
+
+Note, that, in some circumstances, you can use the `search_path` to altogether
+bypass the `mockable` schema (and thus the mock (wrapper) functions therein).
+But, this is only in contexts which are compiled at run-time, such as PL/pgSQL
+function bodies.  A `DEFAULT` expression for a table or view column, for
+example, will be compiled down to references to the _actual_ function objects
+involved, thus making it impossible to do a post-hoc imposition of the
+`mockable` schema by prepending ti to the `search_path`.
+
+Of course, defaults are only that—defaults—and you could, for instance, override
+them while running tests, but that seems altogether more cumbersome than
+directly referencing, for instance, `DEFAULT mockable.now()`.  There remains the
+argument of development-time dependencies versus run-time dependencies, of
+course, and the fact that the latter should be kept to a minimum…
+
+Speaking of PostgreSQL `search_path`s, this is a good opportunity to plug a very
+detailed writeup the extension author did in 2022:
+https://blog.bigsmoke.us/2022/11/11/postgresql-schema-search_path
 
 ## Object reference
 
