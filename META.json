@@ -20,13 +20,13 @@
             }
         }
     },
-    "version": "1.0.0",
+    "version": "1.0.1",
     "abstract": "Create mockable versions of functions from other schemas.",
     "provides": {
         "pg_mockable": {
-            "file": "pg_mockable--1.0.0.sql",
+            "file": "pg_mockable--1.0.1.sql",
             "docfile": "README.md",
-            "version": "1.0.0"
+            "version": "1.0.1"
         }
     },
     "meta-spec": {
