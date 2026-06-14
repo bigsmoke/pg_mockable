@@ -1,8 +1,8 @@
 ---
 pg_extension_name: pg_mockable
-pg_extension_version: 1.0.1
-pg_readme_generated_at: 2024-01-17 12:04:08.729128+00
-pg_readme_version: 0.6.5
+pg_extension_version: 1.1.0
+pg_readme_generated_at: 2026-06-14 14:33:55.332279+02
+pg_readme_version: 0.7.0
 ---
 
 # `pg_mockable` – mock PostgreSQL functions
@@ -101,7 +101,7 @@ There are 1 tables that directly belong to the `pg_mockable` extension.
 
 #### Table: `mock_memory`
 
-The `mock_memory` table has 8 attributes:
+The `mock_memory` table has 9 attributes:
 
 1. `mock_memory.routine_signature` `regprocedure`
 
@@ -115,10 +115,11 @@ The `mock_memory` table has 8 attributes:
    `regprocedure` is not a problem with `pg_dump`/`pg_restore`.  The same is true
    for other `oid` alias types, because these are all serialized as their `text`
    representation during `pg_dump` and then loaded from that text representation
-   again during `pg_restore`.  See https://dba.stackexchange.com/a/324899/79909 for
-   details.
+   again during `pg_restore`.  See <https://dba.stackexchange.com/a/324899/79909>
+   for details.
 
    - `NOT NULL`
+   - `NOT NULL routine_signature`
    - `PRIMARY KEY (routine_signature)`
 
 2. `mock_memory.mock_signature` `text`
@@ -130,15 +131,18 @@ The `mock_memory` table has 8 attributes:
    is actually created in the `AFTER` trigger.
 
    - `NOT NULL`
+   - `NOT NULL mock_signature`
    - `UNIQUE (mock_signature)`
 
 3. `mock_memory.return_type` `text`
 
    - `NOT NULL`
+   - `NOT NULL return_type`
 
 4. `mock_memory.unmock_statement` `text`
 
    - `NOT NULL`
+   - `NOT NULL unmock_statement`
 
 5. `mock_memory.mock_value` `text`
 
@@ -147,9 +151,15 @@ The `mock_memory` table has 8 attributes:
    - `DEFAULT 'TRANSACTION'::text`
    - `CHECK (mock_duration = ANY (ARRAY['TRANSACTION'::text, 'PERSISTENT'::text]))`
 
-7. `mock_memory.pg_extension_name` `name`
+7. `mock_memory.raise_debug_messages` `boolean`
 
-8. `mock_memory.pg_extension_version` `text`
+   - `NOT NULL`
+   - `DEFAULT false`
+   - `NOT NULL raise_debug_messages`
+
+8. `mock_memory.pg_extension_name` `name`
+
+9. `mock_memory.pg_extension_version` `text`
 
 ### Routines
 
@@ -490,6 +500,55 @@ begin
     create extension pg_mockable_dependent_test_extension
         with version 'constver';
 
+    <<indirect_mocked_function_call>>
+    declare
+        _initial_ts timestamptz := mockable.now();
+        _changed_ts timestamptz;
+    begin
+        create function f()
+            returns table (moment timestamptz)
+            language sql
+            parallel safe leakproof
+        begin atomic
+            select
+                s.moment
+            from
+                generate_series(
+                    mockable.now()
+                    ,mockable.now() + '1 year'::interval
+                    ,'1 month'::interval
+                ) as s (moment)
+            ;
+        end;
+
+        create function ff()
+            returns table (moment timestamptz, blaat text)
+            language sql
+            parallel safe leakproof
+        begin atomic
+            select
+                f.moment
+                ,'dfdfdf' as blaat
+            from
+                f() as f
+            ;
+        end;
+
+        assert (select moment from ff() order by moment limit 1) = _initial_ts;
+
+        _changed_ts := mockable.mock('pg_catalog.now()', mockable.now() + '5 minute'::interval);
+        assert (select moment from ff() order by moment limit 1) = _changed_ts;
+        <<blaat>>
+        begin
+            _changed_ts := mockable.mock('pg_catalog.now()', mockable.now() + '25 minute'::interval);
+            assert (select moment from ff() order by moment limit 1) = _changed_ts;
+        exception
+            when transaction_rollback then
+        end blaat;
+        _changed_ts := mockable.mock('pg_catalog.now()', mockable.now() + '15 minute'::interval);
+        assert (select moment from ff() order by moment limit 1) = _changed_ts;
+    end indirect_mocked_function_call;
+
     raise transaction_rollback;
 exception
     when transaction_rollback then
@@ -509,7 +568,7 @@ Procedure-local settings:
 
   *  `SET search_path TO pg_catalog`
 
-#### Function: `wrap_function (regprocedure, mock_memory_duration)`
+#### Function: `wrap_function (regprocedure, mock_memory_duration, boolean)`
 
 Function arguments:
 
@@ -517,10 +576,11 @@ Function arguments:
 | ------ | ---------- | ----------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------- |
 |   `$1` |       `IN` | `function_signature$`                                             | `regprocedure`                                                       |  |
 |   `$2` |       `IN` | `mock_duration$`                                                  | `mock_memory_duration`                                               | `'TRANSACTION'::mock_memory_duration` |
+|   `$3` |       `IN` | `raise_debug_messages$`                                           | `boolean`                                                            | `false` |
 
 Function return type: `mock_memory`
 
-#### Function: `wrap_function (regprocedure, text, mock_memory_duration)`
+#### Function: `wrap_function (regprocedure, text, mock_memory_duration, boolean)`
 
 Function arguments:
 
@@ -529,12 +589,15 @@ Function arguments:
 |   `$1` |       `IN` | `function_signature$`                                             | `regprocedure`                                                       |  |
 |   `$2` |       `IN` | `create_function_statement$`                                      | `text`                                                               |  |
 |   `$3` |       `IN` | `mock_duration$`                                                  | `mock_memory_duration`                                               | `'TRANSACTION'::mock_memory_duration` |
+|   `$4` |       `IN` | `raise_debug_messages$`                                           | `boolean`                                                            | `false` |
 
 Function return type: `mock_memory`
 
 ### Types
 
 The following extra types have been defined _besides_ the implicit composite types of the [tables](#tables) and [views](#views) in this extension.
+
+####Type: `_mock_memory_duration`
 
 #### Enum type: `mock_memory_duration`
 
@@ -543,6 +606,25 @@ CREATE TYPE mock_memory_duration AS ENUM (
     'TRANSACTION',
     'SESSION',
     'PERSISTENT'
+);
+```
+
+####Type: `_mock_memory`
+
+#### Composite type: `mock_memory`
+
+```sql
+CREATE TYPE mock_memory AS (
+  routine_signature regprocedure,
+  mock_signature text,
+  return_type text,
+  unmock_statement text,
+  mock_value text,
+  mock_duration text,
+  raise_debug_messages boolean,
+  pg_extension_name name
+    COLLATE "C",
+  pg_extension_version text
 );
 ```
 

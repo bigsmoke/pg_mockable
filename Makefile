@@ -24,10 +24,10 @@ install_subextension:
 	$(MAKE) -C $(SUBEXTENSION) install
 
 README.md: sql/README.sql install
-	$(PG_BINDIR)/psql --quiet postgres < $< > $@
+	$(PG_BINDIR)/psql -X --quiet postgres < $< > $@
 
 META.json: sql/META.sql install
-	$(PG_BINDIR)/psql --quiet postgres < $< > $@
+	$(PG_BINDIR)/psql -X --quiet postgres < $< > $@
 
 dist: META.json README.md
 	git archive --format zip --prefix=$(EXTENSION)-$(DISTVERSION)/ -o $(EXTENSION)-$(DISTVERSION).zip HEAD
